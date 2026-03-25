@@ -196,6 +196,48 @@ struct TinyGPSHDOP : TinyGPSDecimal
    double hdop() { return value() / 100.0; }
 };
 
+struct TinyGPSatellite
+{
+   uint8_t prn;
+   uint8_t elevation;
+   uint16_t azimuth;
+   uint8_t snr;
+
+   TinyGPSatellite() : prn(1), elevation(0), azimuth(0), snr(0)
+   {}
+};
+
+struct TinyGPSSatellites
+{
+   friend class TinyGPSPlus;
+public:
+   bool isValid() const    { return valid; }
+   bool isUpdated() const  { return updated; }
+   uint32_t age() const    { return valid ? millis() - lastCommitTime : (uint32_t)ULONG_MAX; }
+   uint8_t visibleSatellites() { updated = false; return numVisibleSatellites; }
+   const TinyGPSatellite* getSatellite(uint8_t index) const { return (index < MAX_SATELLITES) ? &satellites[index] : nullptr; }
+
+   TinyGPSSatellites() : valid(false), updated(false), numVisibleSatellites(0), currentSentenceNumber(0), totalSentences(0)
+   {}
+
+private:
+   static const uint8_t MAX_SATELLITES_PER_SENTENCE = 4;
+   static const uint8_t MAX_SATELLITES = 12; // NMEA standard for GPGSV, max 12 satellites in view
+   bool valid, updated;
+   uint32_t lastCommitTime;
+   uint8_t numVisibleSatellites, newNumVisibleSatellites;
+   uint8_t currentSentenceNumber, newCurrentSentenceNumber;
+   uint8_t totalSentences, newTotalSentences;
+   TinyGPSatellite satellites[MAX_SATELLITES];
+
+   void commit();
+   void setTotalSentences(const char *term);
+   void setCurrentSentenceNumber(const char *term);
+   void setNumVisibleSatellites(const char *term);
+   void setSatelliteData(uint8_t sentenceTermNumber, const char *term);
+};
+
+
 class TinyGPSPlus;
 class TinyGPSCustom
 {
@@ -238,6 +280,8 @@ public:
   TinyGPSAltitude altitude;
   TinyGPSInteger satellites;
   TinyGPSHDOP hdop;
+  TinyGPSSatellites gsvSatellites;
+  TinyGPSSatellites bdSatellites;
 
   static const char *libraryVersion() { return _GPS_VERSION; }
 
@@ -254,7 +298,7 @@ public:
   uint32_t passedChecksum()   const { return passedChecksumCount; }
 
 private:
-  enum {GPS_SENTENCE_GGA, GPS_SENTENCE_RMC, GPS_SENTENCE_OTHER};
+  enum {GPS_SENTENCE_GGA, GPS_SENTENCE_RMC, GPS_SENTENCE_GSV, BD_SENTENCE_GSV, GPS_SENTENCE_OTHER};
 
   // parsing state variables
   uint8_t parity;
